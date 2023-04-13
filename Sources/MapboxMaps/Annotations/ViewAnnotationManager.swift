@@ -158,7 +158,7 @@ public final class ViewAnnotationManager {
         }
 
         view.translatesAutoresizingMaskIntoConstraints = false
-        view.isHidden = true
+        hide(view)
 
         let id = id ?? UUID().uuidString
         try mapboxMap.addViewAnnotation(withId: id, options: creationOptions)
@@ -231,7 +231,7 @@ public final class ViewAnnotationManager {
 
         if options.visible == false {
             expectedHiddenByView[view] = true
-            view.isHidden = true
+            hide(view)
         }
 
         if let id = currentFeatureId, let updatedId = options.associatedFeatureId, id != updatedId {
@@ -347,10 +347,11 @@ public final class ViewAnnotationManager {
                 view.frame = position.frame
                 viewsWithUpdatedFrame.insert(view)
             }
-            if view.isHidden {
+            var isViewVisible: Bool = isVisible(view)
+            if isViewVisible {
                 viewsWithUpdatedVisibility.insert(view)
             }
-            view.isHidden = false
+            show(view)
             expectedHiddenByView[view] = false
             visibleAnnotationIds.insert(position.identifier)
             containerView.bringSubviewToFront(view)
@@ -366,10 +367,11 @@ public final class ViewAnnotationManager {
         for id in annotationsToHide {
             guard let view = viewsById[id] else { fatalError() }
             validate(view)
-            if !view.isHidden {
+            var isViewVisible: Bool = isVisible(view)
+            if isViewVisible {
                 viewsWithUpdatedVisibility.insert(view)
             }
-            view.isHidden = true
+            hide(view)
             expectedHiddenByView[view] = true
         }
 
@@ -385,9 +387,14 @@ public final class ViewAnnotationManager {
             containerView.addSubview(view)
         }
         // View is still considered for layout calculation, users should not modify the visibility of view directly
-        if let expectedHidden = expectedHiddenByView[view], view.isHidden != expectedHidden {
+        var isViewVisible: Bool = isVisible(view)
+        if let expectedHidden = expectedHiddenByView[view], isViewVisible != expectedHidden {
             Log.warning(forMessage: "Visibility changed for annotation view. Use `ViewAnnotationManager.update(view: UIView, options: ViewAnnotationOptions)` instead to update visibility and remove the view from layout calculation.", category: "Annotations")
-            view.isHidden = expectedHidden
+            if (expectedHidden) {
+                hide(view)
+            } else {
+                show(view)
+            }
         }
     }
 
@@ -502,5 +509,36 @@ extension ViewAnnotationManager {
         let southwest = Projection.coordinate(for: ProjectedMeters(northing: southing, easting: westing))
 
         return CoordinateBounds(southwest: southwest, northeast: northeast, infiniteBounds: false)
+    }
+
+
+    private func hide(_ view: UIView) {
+        if isVisible(view) {
+            // view.isHidden = true;
+            view.layer.removeAllAnimations()
+            view.transform = CGAffineTransformMake(1.0, 0, 0, 1.0, 0, 0)
+
+            UIView.animate(withDuration: 0.2) {
+                view.transform = CGAffineTransformMake(0.5, 0, 0, 0.5, 0, 0)
+                view.alpha = 0.0
+            }
+        }
+    }
+
+    private func show(_ view: UIView) {
+        if !isVisible(view) {
+            // view.isHidden = false;
+            view.layer.removeAllAnimations()
+            view.transform = CGAffineTransformMake(0.5, 0, 0, 0.5, 0, 0)
+
+            UIView.animate(withDuration: 0.1) {
+                view.transform = CGAffineTransformMake(1.0, 0, 0, 1.0, 0, 0)
+                view.alpha = 1.0
+            }
+        }
+    }
+
+    private func isVisible(_ view: UIView) -> Bool {
+        return view.isHidden == false && view.alpha == 1.0
     }
 }
